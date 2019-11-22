@@ -11,7 +11,13 @@ public enum PlayerState
 {
     IDLE,
     RUNNING,
-    CLIMBING
+    CLIMBING,
+    SLIDING,
+    FALLING,
+    JUMPING,
+    WALLJUMPING,
+    DASHING,
+    NONMOVEABLE,
 }
 
 // Other states to consider: ON_WALL, JUMPING, FALLING, DASHING, WALL_JUMPING
@@ -26,7 +32,7 @@ public enum PlayerState
 public class Movement : MonoBehaviour
 {
     // Use this to check the state
-    private PlayerState currentState = PlayerState.IDLE;
+    public PlayerState currentState = PlayerState.IDLE;
 
     // Custom collision script
     private Collision coll;
@@ -46,20 +52,8 @@ public class Movement : MonoBehaviour
     [Space]
     [Header("Booleans")]
 
-    // These were originally used to switch between movement
-    // They also control the animation system in unity
-    public bool canMove;
-    public bool wallGrab;
-    public bool wallJumped;
-    public bool wallSlide;
-    public bool isDashing;
-
-    [Space]
-
-    private bool groundTouch;
+    public bool groundTouch;
     private bool hasDashed;
-
-    public int side = 1;
 
     // Input Variables
     private float xInput;
@@ -87,7 +81,25 @@ public class Movement : MonoBehaviour
         SetInputVariables();
     }
 
+    private void LateUpdate()
+    {
 
+        #region checkGroundTouch
+        // When you land on the ground
+        if (coll.onGround && !groundTouch)
+        {
+            GroundTouch();
+            groundTouch = true;
+        }
+
+        // When you have left the ground
+        if (!coll.onGround && groundTouch)
+        {
+            groundTouch = false;
+        }
+        #endregion
+
+    }
 
     // Update is called once per frame
     void Update()
@@ -98,132 +110,54 @@ public class Movement : MonoBehaviour
         // Reset Gravity
         rb.gravityScale = 3;
 
+        #region Basic key actions logic
+        //actions placed in order for override
+
+        //running
+        if ((xInput > 0.01f || xInput < -0.01f) && groundTouch)
+        {
+            currentState = PlayerState.RUNNING;
+        }
+        //standing
+        else if (groundTouch) {
+            currentState = PlayerState.IDLE;
+        }
+
+        //wall climbing
+        if (Input.GetButton("Fire2") && coll.onWall)
+        {
+            currentState = PlayerState.CLIMBING;
+        }
+        //wall sliding
+        else if (coll.onWall && !groundTouch)
+        {
+            currentState = PlayerState.SLIDING;
+        }
+
+        //jumping
+        if (Input.GetButtonDown("Jump"))
+        {
+            if (groundTouch)
+            {
+                currentState = PlayerState.JUMPING;
+            }
+            else if (coll.onWall)
+            {
+                currentState = PlayerState.WALLJUMPING;
+            }
+        }
+        //dashing
+        if (Input.GetButtonDown("Fire1") && !hasDashed)
+        {
+            currentState = PlayerState.DASHING;
+        }
+
+
+        #endregion
+
         // Use the statemachine
         StateMachine(currentState);
 
-    
-        // Can enter the climbing state from any state
-        // You may want to move this depending on the states you add
-        if (coll.onWall && Input.GetButton("Fire2") && canMove)
-        {
-            // Change state
-            currentState = PlayerState.CLIMBING;
-
-            // Flips sprite based on which wall
-            if(side != coll.wallSide)
-                anim.Flip(side*-1);
-            
-            // Bools for movement and animation
-            wallGrab = true;
-            wallSlide = false;
-        }
-
-        // Used when no longer on a wall
-        if (Input.GetButtonUp("Fire2") || !coll.onWall || !canMove)
-        {
-            wallGrab = false;
-            wallSlide = false;
-        }
-
-        // When on the ground and not dashing
-        // You might want to move these to a state
-        if (coll.onGround && !isDashing)
-        {
-            wallJumped = false;
-            GetComponent<BetterJumping>().enabled = true;
-        }
-        
-        // Old Climbing code
-        if (wallGrab && !isDashing)
-        {
-            // All this movement code is now in the CLIMBING state
-        }
-        else
-        {
-            // Moved this to the leave condition in the CLIMBING state
-            //rb.gravityScale = 3;
-        }
-
-        // When on the wall and not on the gorund
-        if(coll.onWall && !coll.onGround)
-        {
-            // If the player is moving towards the wall
-            if (xInput != 0 && !wallGrab)
-            {   
-                // Slide down the wall
-                wallSlide = true;
-                WallSlide();
-            }
-
-            // Maybe there could be an ON_WALL state?
-            // Try it out!
-        }
-
-        // If not on the wall and on the ground
-        // Maybe move this to IDLE? 
-        if (!coll.onWall || coll.onGround)
-            wallSlide = false;
-
-        // Jump when hitting the space bar
-        if (Input.GetButtonDown("Jump"))
-        {
-            // Sets the jump animation
-            anim.SetTrigger("jump");
-
-            // What states can you jump from?
-
-            // Maybe move to IDLE and/or RUNNING
-            if (coll.onGround)
-                Jump(Vector2.up, false);
-
-            // Maybe move to an ON_WALL state
-            if (coll.onWall && !coll.onGround)
-                WallJump();
-        }
-
-        // If left click and if dash is not on cooldown
-        if (Input.GetButtonDown("Fire1") && !hasDashed)
-        {
-            // As long as there is some directional input
-            if(xRaw != 0 || yRaw != 0)
-
-                // Dash using raw input values
-                Dash(xRaw, yRaw);
-        }
-
-        // When you land on the ground
-        if (coll.onGround && !groundTouch)
-        {   
-            // GroundTouch() resets the dash, as you can only dash once per jump
-            GroundTouch();
-            groundTouch = true;
-        }
-
-        // When you have left the ground
-        if(!coll.onGround && groundTouch)
-        {
-            groundTouch = false;
-        }
-
-
-        // Return if on a wall
-        if (wallGrab || wallSlide || !canMove)
-            return;
-
-        // Otherwise use the horizontal input to flip the sprite
-        if(xInput > 0)
-        {
-            side = 1;
-            anim.Flip(side);
-        }
-        if (xInput < 0)
-        {
-            side = -1;
-            anim.Flip(side);
-        }
-
-        // This code may need to stay outside of the states
-        // Since IDLE, RUNNING, JUMPING, FALLING all still need to use this code
 
     }
 
@@ -233,13 +167,7 @@ public class Movement : MonoBehaviour
         switch (state)
         {
             case PlayerState.IDLE:
-
-                // Condition: Horizontal input, go to RUNNING state
-                if(xInput > 0.01f || xInput < -0.01f)
-                {
-                    currentState = PlayerState.RUNNING;
-                }
-
+                //does nothing
             break;
 
             case PlayerState.RUNNING:
@@ -271,20 +199,55 @@ public class Movement : MonoBehaviour
                 float speedModifier = yInput > 0 ? .5f : 1;
                 rb.velocity = new Vector2(rb.velocity.x, yInput * (speed * speedModifier));
 
-                // Leave Condition:
-                if (!coll.onWall || !Input.GetButton("Fire2"))
+                if (!coll.onWall)
                 {
-                    // Change state to default
-                    currentState = PlayerState.IDLE;
-            
-                    // Reset Gravity
-                    rb.gravityScale = 3;
+                    currentState = PlayerState.FALLING;
                 }
-        
-            break;
 
-            // More states here pls
 
+                break;
+
+            case PlayerState.SLIDING:
+                WallSlide();
+
+                // Limit horizontal movement
+                if (xInput > .2f || xInput < -.2f)
+                {
+                    rb.velocity = new Vector2(rb.velocity.x, 0);
+                }
+
+                if (!coll.onWall) {
+                    currentState = PlayerState.FALLING;
+                }
+
+                break;
+
+            case PlayerState.FALLING:
+                Walk(inputDirection);
+                break;
+
+            case PlayerState.JUMPING:
+                anim.SetTrigger("jump");
+                Jump(Vector2.up, false);
+                currentState = PlayerState.FALLING;
+
+                break;
+
+            case PlayerState.WALLJUMPING:
+                anim.SetTrigger("jump");
+                WallJump();
+                break;
+
+            case PlayerState.DASHING:
+                // As long as there is some directional input
+                if (xRaw != 0 || yRaw != 0)
+                    // Dash using raw input values
+                    Dash(xRaw, yRaw);
+
+                break;
+            case PlayerState.NONMOVEABLE:
+                //this is intentionally empty
+                break;
         }
     }
 
@@ -292,19 +255,17 @@ public class Movement : MonoBehaviour
     {
         // Reset dash
         hasDashed = false;
-        isDashing = false;
-
-        side = anim.sr.flipX ? -1 : 1;
+        currentState = PlayerState.IDLE;
     }
 
 
     private void Dash(float x, float y)
-    {   
+    {
         // Graphics effects
         Camera.main.transform.DOComplete();
         Camera.main.transform.DOShakePosition(.2f, .5f, 14, 90, false, true);
         FindObjectOfType<RippleEffect>().Emit(Camera.main.WorldToViewportPoint(transform.position));
-        
+
         // Put dash on cooldown
         hasDashed = true;
 
@@ -316,6 +277,10 @@ public class Movement : MonoBehaviour
 
         rb.velocity += dir.normalized * dashSpeed;
         StartCoroutine(DashWait());
+
+        if (!groundTouch) {     
+            currentState = PlayerState.FALLING;
+        }
     }
 
     IEnumerator DashWait()
@@ -335,9 +300,6 @@ public class Movement : MonoBehaviour
         // Disable better jumping script
         GetComponent<BetterJumping>().enabled = false;
 
-        wallJumped = true;
-        isDashing = true;
-
         // Wait for dash to end
         yield return new WaitForSeconds(.3f);
 
@@ -346,9 +308,6 @@ public class Movement : MonoBehaviour
 
         // Turn better jumping back on
         GetComponent<BetterJumping>().enabled = true;
-
-        wallJumped = false;
-        isDashing = false;
     }
 
     IEnumerator GroundDash()
@@ -361,12 +320,6 @@ public class Movement : MonoBehaviour
 
     private void WallJump()
     {
-        // Flip sprite if needed
-        if ((side == 1 && coll.onRightWall) || side == -1 && !coll.onRightWall)
-        {
-            side *= -1;
-            anim.Flip(side);
-        }
 
         // Disable movement while wall jumping
         StopCoroutine(DisableMovement(0));
@@ -375,21 +328,14 @@ public class Movement : MonoBehaviour
         // Set direction based on which wall
         Vector2 wallDir = coll.onRightWall ? Vector2.left : Vector2.right;
 
+        currentState = PlayerState.NONMOVEABLE;
+
         // Jump using the direction
         Jump((Vector2.up / 1.5f + wallDir / 1.5f), true);
-
-        wallJumped = true;
     }
 
     private void WallSlide()
     {   
-        // Flip if needed
-        if(coll.wallSide != side)
-         anim.Flip(side * -1);
-        
-        if (!canMove)
-            return;
-
         // If the player is holding towards the wall...
         bool pushingWall = false;
         if((rb.velocity.x > 0 && coll.onRightWall) || (rb.velocity.x < 0 && coll.onLeftWall))
@@ -403,21 +349,12 @@ public class Movement : MonoBehaviour
     }
 
     private void Walk(Vector2 dir)
-    {   
-        // Do we need these if statements anymore?
-        if (!canMove)
-            return;
-        if (wallGrab)
-            return;
-        
-        if (!wallJumped)
-        {
-            rb.velocity = new Vector2(dir.x * speed, rb.velocity.y);
-        }
-        else
-        {
-            rb.velocity = Vector2.Lerp(rb.velocity, (new Vector2(dir.x * speed, rb.velocity.y)), wallJumpLerp * Time.deltaTime);
-        }
+    {           
+        rb.velocity = new Vector2(dir.x * speed, rb.velocity.y);
+    }
+
+    private void Steer(Vector2 dir) {
+        rb.velocity = Vector2.Lerp(rb.velocity, (new Vector2(dir.x * speed, rb.velocity.y)), wallJumpLerp * Time.deltaTime);
     }
 
     private void Jump(Vector2 dir, bool wall)
@@ -427,10 +364,13 @@ public class Movement : MonoBehaviour
     }
 
     IEnumerator DisableMovement(float time)
-    {  
-        canMove = false;
+    {
         yield return new WaitForSeconds(time);
-        canMove = true;
+
+        if (!groundTouch)
+        {
+            currentState = PlayerState.FALLING;
+        }
     }
 
     void SetRigidbodyDrag(float x)
