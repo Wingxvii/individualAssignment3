@@ -110,7 +110,7 @@ public class Movement : MonoBehaviour
         // Reset Gravity
         rb.gravityScale = 3;
 
-        #region Basic key actions logic
+        #region state logic
         //actions placed in order for override
 
         //running
@@ -118,20 +118,19 @@ public class Movement : MonoBehaviour
         {
             currentState = PlayerState.RUNNING;
         }
-        //standing
-        else if (groundTouch) {
-            currentState = PlayerState.IDLE;
-        }
 
         //wall climbing
-        if (Input.GetButton("Fire2") && coll.onWall)
+        if (rb.velocity.y < 0.1f) //ONLY CLIMB ON FALL
         {
-            currentState = PlayerState.CLIMBING;
-        }
-        //wall sliding
-        else if (coll.onWall && !groundTouch)
-        {
-            currentState = PlayerState.SLIDING;
+            if (Input.GetButton("Fire2") && coll.onWall)
+            {
+                currentState = PlayerState.CLIMBING;
+            }
+            //wall sliding
+            else if (coll.onWall && !groundTouch)
+            {
+                currentState = PlayerState.SLIDING;
+            }
         }
 
         //jumping
@@ -140,6 +139,7 @@ public class Movement : MonoBehaviour
             if (groundTouch)
             {
                 currentState = PlayerState.JUMPING;
+                groundTouch = false;
             }
             else if (coll.onWall)
             {
@@ -204,7 +204,15 @@ public class Movement : MonoBehaviour
                     currentState = PlayerState.FALLING;
                 }
 
+                // Leave Condition:
+                if (!coll.onWall || !Input.GetButton("Fire2"))
+                {
+                    // Change state to default
+                    currentState = PlayerState.IDLE;
 
+                    // Reset Gravity
+                    rb.gravityScale = 3;
+                }
                 break;
 
             case PlayerState.SLIDING:
@@ -218,6 +226,16 @@ public class Movement : MonoBehaviour
 
                 if (!coll.onWall) {
                     currentState = PlayerState.FALLING;
+                }
+
+                // Leave Condition:
+                if (!coll.onWall || !Input.GetButton("Fire2"))
+                {
+                    // Change state to default
+                    currentState = PlayerState.IDLE;
+
+                    // Reset Gravity
+                    rb.gravityScale = 3;
                 }
 
                 break;
@@ -255,7 +273,6 @@ public class Movement : MonoBehaviour
     {
         // Reset dash
         hasDashed = false;
-        currentState = PlayerState.IDLE;
     }
 
 
