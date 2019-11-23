@@ -84,6 +84,7 @@ public class Movement : MonoBehaviour
     private void LateUpdate()
     {
 
+        //this is used to check ground touch logic after physics
         #region checkGroundTouch
         // When you land on the ground
         if (coll.onGround && !groundTouch)
@@ -110,8 +111,10 @@ public class Movement : MonoBehaviour
         // Reset Gravity
         rb.gravityScale = 3;
 
+        //here is all the state change logic
         #region state logic
         //actions placed in order for override
+
 
         //running
         if ((xInput > 0.01f || xInput < -0.01f) && groundTouch)
@@ -157,7 +160,6 @@ public class Movement : MonoBehaviour
 
         // Use the statemachine
         StateMachine(currentState);
-
 
     }
 
